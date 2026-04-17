@@ -1,18 +1,33 @@
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, LayoutDashboard, FileText, Menu, X } from "lucide-react";
+import { AlertTriangle, LayoutDashboard, FileText, Menu, X, LogIn, LogOut } from "lucide-react";
 import { useState } from "react";
+import { useAuth } from "@/hooks/useAuth";
+import { toast } from "sonner";
 
 const Header = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { user, isAdmin, signOut } = useAuth();
 
   const navLinks = [
     { path: "/", label: "Home", icon: null },
     { path: "/report", label: "Report Issue", icon: AlertTriangle },
     { path: "/track", label: "Track Issues", icon: FileText },
-    { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    ...(isAdmin ? [{ path: "/dashboard", label: "Dashboard", icon: LayoutDashboard }] : []),
   ];
+
+  const handleAuthClick = async () => {
+    if (user) {
+      await signOut();
+      toast.success("Signed out");
+      navigate("/");
+    } else {
+      navigate("/auth");
+    }
+    setMobileMenuOpen(false);
+  };
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -42,6 +57,9 @@ const Header = () => {
               </Button>
             </Link>
           ))}
+          <Button variant="outline" size="sm" className="gap-2 ml-2" onClick={handleAuthClick}>
+            {user ? <><LogOut className="h-4 w-4" /> Sign Out</> : <><LogIn className="h-4 w-4" /> Admin Login</>}
+          </Button>
         </nav>
 
         {/* Mobile Menu Toggle */}
@@ -70,6 +88,9 @@ const Header = () => {
                 </Button>
               </Link>
             ))}
+            <Button variant="outline" className="w-full justify-start gap-2 mt-2" onClick={handleAuthClick}>
+              {user ? <><LogOut className="h-4 w-4" /> Sign Out</> : <><LogIn className="h-4 w-4" /> Admin Login</>}
+            </Button>
           </div>
         </nav>
       )}
