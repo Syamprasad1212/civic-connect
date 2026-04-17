@@ -57,6 +57,9 @@ const Header = () => {
               </Button>
             </Link>
           ))}
+          <Button variant="outline" size="sm" className="gap-2 ml-2" onClick={handleAuthClick}>
+            {user ? <><LogOut className="h-4 w-4" /> Sign Out</> : <><LogIn className="h-4 w-4" /> Admin Login</>}
+          </Button>
         </nav>
 
         {/* Mobile Menu Toggle */}
@@ -85,6 +88,9 @@ const Header = () => {
                 </Button>
               </Link>
             ))}
+            <Button variant="outline" className="w-full justify-start gap-2 mt-2" onClick={handleAuthClick}>
+              {user ? <><LogOut className="h-4 w-4" /> Sign Out</> : <><LogIn className="h-4 w-4" /> Admin Login</>}
+            </Button>
           </div>
         </nav>
       )}
