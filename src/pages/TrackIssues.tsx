@@ -1,13 +1,15 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import StatusBadge from "@/components/StatusBadge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { mockIssues, categories, type IssueStatus } from "@/lib/mockData";
-import { Search, MapPin, Calendar, User } from "lucide-react";
+import { categories, type IssueStatus } from "@/lib/mockData";
+import { Search, MapPin, Calendar, User, Loader2 } from "lucide-react";
 import { format } from "date-fns";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 const statusLabels: Record<IssueStatus, string> = {
   new: "New",
@@ -16,12 +18,53 @@ const statusLabels: Record<IssueStatus, string> = {
   resolved: "Resolved",
 };
 
+interface IssueRow {
+  id: string;
+  title: string;
+  description: string;
+  category: string;
+  status: IssueStatus;
+  location: string;
+  image_url: string | null;
+  reporter_name: string | null;
+  created_at: string;
+}
+
 const TrackIssues = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [issues, setIssues] = useState<IssueRow[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const filteredIssues = mockIssues.filter((issue) => {
+  useEffect(() => {
+    const load = async () => {
+      const { data, error } = await supabase
+        .from("issues")
+        .select("id, title, description, category, status, location, image_url, reporter_name, created_at")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        toast.error("Failed to load issues");
+        console.error(error);
+      } else {
+        setIssues((data ?? []) as IssueRow[]);
+      }
+      setLoading(false);
+    };
+    load();
+
+    const channel = supabase
+      .channel("issues-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "issues" }, () => load())
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const filteredIssues = issues.filter((issue) => {
     const matchesSearch =
       issue.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       issue.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -44,7 +87,6 @@ const TrackIssues = () => {
           </p>
         </div>
 
-        {/* Filters */}
         <div className="mb-8 flex flex-col sm:flex-row gap-4 animate-slide-up">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -82,14 +124,18 @@ const TrackIssues = () => {
           </Select>
         </div>
 
-        {/* Results Count */}
         <p className="mb-4 text-sm text-muted-foreground">
-          Showing {filteredIssues.length} of {mockIssues.length} issues
+          Showing {filteredIssues.length} of {issues.length} issues
         </p>
 
-        {/* Issues List */}
         <div className="space-y-4">
-          {filteredIssues.length === 0 ? (
+          {loading ? (
+            <Card className="shadow-card">
+              <CardContent className="py-12 text-center">
+                <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
+              </CardContent>
+            </Card>
+          ) : filteredIssues.length === 0 ? (
             <Card className="shadow-card">
               <CardContent className="py-12 text-center">
                 <p className="text-muted-foreground">No issues found matching your criteria.</p>
@@ -106,11 +152,13 @@ const TrackIssues = () => {
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div className="flex items-center gap-3">
                       <span className="text-2xl">
-                        {categories.find((c) => c.value === issue.category)?.icon}
+                        {categories.find((c) => c.value === issue.category)?.icon ?? "📋"}
                       </span>
                       <div>
                         <CardTitle className="text-lg">{issue.title}</CardTitle>
-                        <p className="text-sm text-muted-foreground font-mono">{issue.id}</p>
+                        <p className="text-sm text-muted-foreground font-mono">
+                          {issue.id.slice(0, 8).toUpperCase()}
+                        </p>
                       </div>
                     </div>
                     <StatusBadge status={issue.status}>{statusLabels[issue.status]}</StatusBadge>
@@ -118,18 +166,27 @@ const TrackIssues = () => {
                 </CardHeader>
                 <CardContent>
                   <p className="text-muted-foreground mb-4 line-clamp-2">{issue.description}</p>
+                  {issue.image_url && (
+                    <img
+                      src={issue.image_url}
+                      alt={issue.title}
+                      className="w-full max-h-48 object-cover rounded-md mb-4 border border-border"
+                    />
+                  )}
                   <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
                     <span className="flex items-center gap-1">
                       <MapPin className="h-4 w-4" />
                       {issue.location}
                     </span>
-                    <span className="flex items-center gap-1">
-                      <User className="h-4 w-4" />
-                      {issue.reportedBy}
-                    </span>
+                    {issue.reporter_name && (
+                      <span className="flex items-center gap-1">
+                        <User className="h-4 w-4" />
+                        {issue.reporter_name}
+                      </span>
+                    )}
                     <span className="flex items-center gap-1">
                       <Calendar className="h-4 w-4" />
-                      {format(new Date(issue.reportedAt), "MMM d, yyyy")}
+                      {format(new Date(issue.created_at), "MMM d, yyyy")}
                     </span>
                   </div>
                 </CardContent>
